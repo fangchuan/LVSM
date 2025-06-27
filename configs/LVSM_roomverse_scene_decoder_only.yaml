@@ -29,8 +29,9 @@ training:
   scene_scale_factor: 1.35
   checkpoint_dir: ./checkpoints/scene_decoder_only_256.pt
   checkpoint_every: 2000
-  dataset_name: data.dataset_scene.Dataset
-  dataset_path: ./preprocessed_data/train/full_list.txt
+  dataset_name: data.dataset_scene.RoomverseDataset
+  dataset_root: ./preprocessed_data/roomverse_data/processed_data_spiral
+  dataset_path: ./preprocessed_data/roomverse_data/processed_data_spiral/test_list.txt
   grad_accum_steps: 1
   grad_checkpoint_every: 1
   grad_clip_norm: 1.0
@@ -71,9 +72,9 @@ training:
 
 # inference / evaluation
 inference:
-  if_inference: False
-  compute_metrics: False
-  view_idx_file_path: ./data/evaluation_index_re10k.json
+  if_inference: True
+  compute_metrics: True
+  test_split_file_path: ./data/evaluation_index_re10k.json
   render_video: False
   render_video_config:
     traj_type: interpolate

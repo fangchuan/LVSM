@@ -209,9 +209,9 @@ def _save_images(result, batch_idx, out_dir):
     # Save GT vs prediction side-by-side
     comparison = torch.cat(
         (result.target.image[batch_idx], result.render[batch_idx]), 
-        dim=2
+        dim=-1
     ).detach().cpu()
-    comparison = rearrange(comparison, "v c h w -> h (v w) c")
+    comparison = rearrange(comparison, "v c h w -> (v h) w c")
     comparison = (comparison.numpy() * 255.0).clip(0.0, 255.0).astype(np.uint8)
     Image.fromarray(comparison).save(os.path.join(out_dir, "gt_vs_pred.png"))
     

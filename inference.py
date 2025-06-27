@@ -99,3 +99,18 @@ if ddp_info.is_main_process and config.inference.get("compute_metrics", False):
 dist.barrier()
 dist.destroy_process_group()
 exit(0)
+
+# torchrun --nproc_per_node 1 --nnodes 1 \
+# --rdzv_id 18635 --rdzv_backend c10d --rdzv_endpoint localhost:29506 \
+# inference.py --config "configs/LVSM_roomverse_scene_decoder_only.yaml" \
+# training.dataset_path = "./preprocessed_data/roomverse_data/processed_data_spiral/test_list.txt" \
+# training.batch_size_per_gpu = 1 \
+# training.target_has_input =  false \
+# training.num_views = 8 \
+# training.square_crop = true \
+# training.num_input_views = 1 \
+# training.num_target_views = 7 \
+# inference.if_inference = true \
+# inference.compute_metrics = true \
+# inference.render_video = true \
+# inference_out_dir = ./experiments/roomverse_evaluation/spiral_cams_1view

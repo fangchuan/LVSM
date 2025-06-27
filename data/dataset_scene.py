@@ -408,3 +408,212 @@ class RoomverseDataset(torch.utils.data.Dataset):
             "index": indices,
             "scene_name": room_uid
         }
+
+class SpatialGenDataset(Dataset):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        # Load scene paths from dataset file
+        try:
+            with open(self.config.training.dataset_path, 'r') as f:
+                self.all_scene_paths = f.read().splitlines()
+            self.all_scene_paths = [path.strip() for path in self.all_scene_paths if path.strip()]
+        except Exception as e:
+            print(f"Error reading dataset paths from '{self.config.training.dataset_path}'")
+            raise e
+
+        # Inference setup
+        self.inference = self.config.inference.get("if_inference", False)
+        self.view_idx_list = {}
+        if self.inference and self.config.inference.get("view_idx_file_path", None):
+            if os.path.exists(self.config.inference.view_idx_file_path):
+                with open(self.config.inference.view_idx_file_path, 'r') as f:
+                    self.view_idx_list = json.load(f)
+                # Filter scenes with specified views
+                valid_scenes = [k for k, v in self.view_idx_list.items() if v is not None]
+                self.all_scene_paths = [
+                    path for path in self.all_scene_paths
+                    if os.path.basename(path) in valid_scenes
+                ]
+
+    def __len__(self):
+        return len(self.all_scene_paths)
+
+    def _load_scene_data(self, scene_path: str) -> Dict[str, Any]:
+        """Load SpatialGen scene data from NPZ file"""
+        npz_path = os.path.join(scene_path, "inference_results.npz")
+        data_dict = np.load(npz_path, allow_pickle=True)
+        # Get first room data (assumes single room per file)
+        room_data = next(iter(data_dict.values())).item()
+        return room_data
+
+    def _build_frames(self, room_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Construct frame dictionaries from SpatialGen data"""
+        frames = []
+        intrinsic = room_data['intrinsic']
+        fxfycxcy = [intrinsic[0, 0], intrinsic[1, 1], intrinsic[0, 2], intrinsic[1, 2]]
+        
+        # Process input views
+        for i in range(len(room_data['input_rgbs'])):
+            frames.append({
+                "image": room_data['input_rgbs'][i],
+                "c2w": room_data['input_poses'][i],
+                "fxfycxcy": fxfycxcy.copy()
+            })
+        
+        # Process target views
+        for i in range(len(room_data['target_rgbs'])):
+            frames.append({
+                "image": room_data['target_rgbs'][i],
+                "c2w": room_data['target_poses'][i],
+                "fxfycxcy": fxfycxcy.copy()
+            })
+            
+        return frames
+
+    def view_selector(self, frames: List[Dict[str, Any]]) -> Optional[List[int]]:
+        """Select views based on frame distance criteria"""
+        if len(frames) < self.config.training.num_views:
+            return None
+            
+        cfg = self.config.training.view_selector
+        min_dist = cfg.get("min_frame_dist", 25)
+        max_dist = min(len(frames) - 1, cfg.get("max_frame_dist", 100))
+        
+        if max_dist <= min_dist:
+            return None
+            
+        frame_dist = random.randint(min_dist, max_dist)
+        if len(frames) <= frame_dist:
+            return None
+            
+        start = random.randint(0, len(frames) - frame_dist - 1)
+        end = start + frame_dist
+        sampled = random.sample(range(start + 1, end), self.config.training.num_views - 2)
+        return [start, end] + sampled
+
+    def preprocess_frames(self, frames: List[Dict[str, Any]]) -> Tuple[Tensor, Tensor, Tensor]:
+        """Preprocess frames including resize, crop and intrinsic adjustment"""
+        resize_h = self.config.model.image_tokenizer.image_size
+        patch_size = self.config.model.image_tokenizer.patch_size
+        square_crop = self.config.training.get("square_crop", False)
+        
+        images, intrinsics, c2ws = [], [], []
+        
+        for frame in frames:
+            # Load image from numpy array
+            img_arr = frame["image"]
+            h, w = img_arr.shape[:2]
+            img = Image.fromarray(img_arr)
+            
+            # Calculate new width maintaining aspect ratio
+            new_w = int(resize_h / h * w)
+            new_w = int(round(new_w / patch_size) * patch_size)
+            img = img.resize((new_w, resize_h), Image.LANCZOS)
+            
+            # Apply square crop if needed
+            if square_crop:
+                min_size = min(resize_h, new_w)
+                start_h = (resize_h - min_size) // 2
+                start_w = (new_w - min_size) // 2
+                img = img.crop((start_w, start_h, start_w + min_size, start_h + min_size))
+            
+            # Convert to tensor and normalize
+            img_tensor = torch.from_numpy(np.array(img) / 255.0).permute(2, 0, 1).float()
+            
+            # Adjust intrinsics
+            fx, fy, cx, cy = frame["fxfycxcy"]
+            resize_ratio_x = new_w / w
+            resize_ratio_y = resize_h / h
+            fx, fy, cx, cy = (
+                fx * resize_ratio_x,
+                fy * resize_ratio_y,
+                cx * resize_ratio_x,
+                cy * resize_ratio_y
+            )
+            
+            if square_crop:
+                cx -= start_w
+                cy -= start_h
+                
+            images.append(img_tensor)
+            intrinsics.append(torch.tensor([fx, fy, cx, cy]).float())
+            c2ws.append(torch.from_numpy(frame["c2w"]).float())
+            
+        return (
+            torch.stack(images, dim=0),
+            torch.stack(intrinsics, dim=0),
+            torch.stack(c2ws, dim=0)
+        )
+
+    def preprocess_poses(
+        self,
+        c2ws: Tensor,
+        scene_scale_factor: float = 1.35
+    ) -> Tensor:
+        """Normalize poses to common coordinate system and scale"""
+        # Center and align coordinate system
+        center = c2ws[:, :3, 3].mean(0)
+        avg_forward = F.normalize(c2ws[:, :3, 2].mean(0), dim=-1)
+        avg_down = c2ws[:, :3, 1].mean(0)
+        avg_right = F.normalize(torch.cross(avg_down, avg_forward), dim=-1)
+        avg_down = F.normalize(torch.cross(avg_forward, avg_right), dim=-1)
+        
+        # Create average pose
+        avg_pose = torch.eye(4, device=c2ws.device)
+        avg_pose[:3, :3] = torch.stack([avg_right, avg_down, avg_forward], dim=-1)
+        avg_pose[:3, 3] = center
+        avg_pose = torch.linalg.inv(avg_pose)
+        
+        # Transform poses
+        c2ws = avg_pose @ c2ws
+        
+        # Rescale scene
+        scene_scale = torch.max(torch.abs(c2ws[:, :3, 3]))
+        c2ws[:, :3, 3] /= scene_scale * scene_scale_factor
+        
+        return c2ws
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        try:
+            scene_path = self.all_scene_paths[idx]
+            scene_name = os.path.basename(scene_path)
+            
+            # Load and process scene data
+            room_data = self._load_scene_data(scene_path)
+            frames = self._build_frames(room_data)
+            
+            # Select views
+            if self.inference and scene_name in self.view_idx_list:
+                view_idxs = self.view_idx_list[scene_name]
+                image_indices = view_idxs["context"] + view_idxs["target"]
+            else:
+                image_indices = self.view_selector(frames)
+                if image_indices is None:
+                    return self.__getitem__(random.randint(0, len(self) - 1))
+            
+            # Get selected frames
+            selected_frames = [frames[i] for i in image_indices]
+            
+            # Preprocess data
+            images, intrinsics, c2ws = self.preprocess_frames(selected_frames)
+            c2ws = self.preprocess_poses(c2ws, self.config.training.get("scene_scale_factor", 1.35))
+            
+            # Prepare indices tensor
+            image_indices_t = torch.tensor(image_indices).long().unsqueeze(-1)
+            scene_indices_t = torch.full_like(image_indices_t, idx)
+            indices = torch.cat([image_indices_t, scene_indices_t], dim=-1)
+            
+            return {
+                "image": images,
+                "c2w": c2ws,
+                "fxfycxcy": intrinsics,
+                "index": indices,
+                "scene_name": scene_name
+            }
+            
+        except Exception as e:
+            print(f"Error loading scene {scene_path}: {str(e)}")
+            traceback.print_exc()
+            return self.__getitem__(random.randint(0, len(self) - 1))

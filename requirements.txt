@@ -1,6 +1,32 @@
---extra-index-url https://download.pytorch.org/whl/cu118
-torch==2.4.1
-torchvision==0.19.1+cu118
+# # --extra-index-url https://download.pytorch.org/whl/cu118
+# # torch==2.4.1
+# # torchvision==0.19.1+cu118
+# # xformers==0.0.28
+# imageio
+# Pillow
+# imageio-ffmpeg
+# omegaconf
+# # einops>= 0.4.1 
+# # transformers==4.30.2
+# # torchmetrics>= 0.11.0
+# datasets
+# rich>=13.3.2
+# wandb
+# # opencv-python==4.7.0.72
+# # opencv-python-headless==4.7.0.72
+# opencv-python-headless
+# ipdb
+# tqdm
+# easydict
+# lpips
+# jaxtyping
+# scikit-image
+# # numpy==1.26.4
+
+#pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu121
+# --extra-index-url https://download.pytorch.org/whl/cu122
+# torch==2.4.1
+# torchvision==0.19.1+cu122
 xformers==0.0.28
 imageio==2.33.0
 Pillow==10.0.1

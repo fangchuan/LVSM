@@ -39,6 +39,7 @@ class PerceptualLoss(nn.Module):
         if torch.distributed.get_rank() == 0:
             # Download weights if needed
             if not weight_file.exists():
+                print(f"Downloading VGG weights to {weight_file}...")
                 os.system(f'wget https://www.vlfeat.org/matconvnet/models/imagenet-vgg-verydeep-19.mat -O {weight_file}')
         torch.distributed.barrier()
         

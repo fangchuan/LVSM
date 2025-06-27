@@ -11,7 +11,7 @@ from utils.metric_utils import export_results, summarize_evaluation
 
 # Load config and read(override) arguments from CLI
 config = init_config()
-
+print(f"Config loaded: {config}")
 os.environ["OMP_NUM_THREADS"] = str(config.training.get("num_threads", 1))
 
 # Set up DDP training/inference and Fix random seed
@@ -102,15 +102,15 @@ exit(0)
 
 # torchrun --nproc_per_node 1 --nnodes 1 \
 # --rdzv_id 18635 --rdzv_backend c10d --rdzv_endpoint localhost:29506 \
-# inference.py --config "configs/LVSM_roomverse_scene_decoder_only.yaml" \
-# training.dataset_path = "./preprocessed_data/roomverse_data/processed_data_spiral/test_list.txt" \
+# inference.py --config "configs/LVSM_spatialgen_decoder_only.yaml" \
+# inference_out_dir = ./experiments/spatialgen_evaluation/spiral_cams
 # training.batch_size_per_gpu = 1 \
 # training.target_has_input =  false \
-# training.num_views = 8 \
+# training.num_views = 26 \
 # training.square_crop = true \
-# training.num_input_views = 1 \
-# training.num_target_views = 7 \
+# training.num_input_views = 2 \
+# training.num_target_views = 24 \
 # inference.if_inference = true \
-# inference.compute_metrics = true \
+# inference.compute_metrics = false \
 # inference.render_video = true \
-# inference_out_dir = ./experiments/roomverse_evaluation/spiral_cams_1view
+# inference_out_dir = ./experiments/spatialgen_evaluation/spiral_cams

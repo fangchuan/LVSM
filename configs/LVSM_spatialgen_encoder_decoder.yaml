@@ -2,12 +2,12 @@ model:
   class_name: model.LVSM_scene_decoder_only.Images2LatentScene
 
   image_tokenizer:
-    image_size: 512
+    image_size: 256
     patch_size: 8
     in_channels: 9  # 3 RGB + 3 direction + 3 Reference
 
   target_pose_tokenizer:
-    image_size: 512
+    image_size: 256
     patch_size: 8
     in_channels: 6  # 3 direction + 3 Reference
   transformer:
@@ -21,14 +21,13 @@ model:
 training:
   amp_dtype: bf16
   api_key_path: ./configs/api_keys.yaml
-  batch_size_per_gpu: 1
+  batch_size_per_gpu: 8
   beta1: 0.9
   beta2: 0.95
   allowed_gradnorm_factor: 5
   center_crop: true
   scene_scale_factor: 1.35
-  # checkpoint_dir: /data-nas/data/experiments/hangyu/huggeface/LVSM/scene_decoder_only_256.pt
-  checkpoint_dir: /data-nas/data/experiments/hangyu/huggeface/LVSM/lvsm_scene_decoder_only_res512.pt
+  checkpoint_dir: /data-nas/data/experiments/hangyu/huggeface/LVSM/lvsm_scene_encoder_decoder_res512.pt
   checkpoint_every: 2000
   dataset_name: data.dataset_scene.SpatialGenDataset
   npz_path: /data-nas/experiments/zhenqing/SparseGS/data/spatialgen-spatialgen-eval/val/20241106_3FO4K5HXIXL1_perspective_room_279
@@ -45,7 +44,7 @@ training:
 
 
   num_input_views: 2
-  num_target_views: 6
+  num_target_views: 24
   num_threads: 1
   num_views: 8
   num_workers: 1
@@ -72,14 +71,14 @@ training:
 
 # inference / evaluation
 inference:
-  if_inference: True
+  if_inference: False
   compute_metrics: False
   view_idx_file_path: ./data/evaluation_index_re10k.json
-  render_video: True
+  render_video: False
   render_video_config:
     traj_type: interpolate
-    num_frames: 24
-    loop_video: False 
+    num_frames: 60
+    loop_video: True 
     order_poses: False
 
   

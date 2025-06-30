@@ -249,13 +249,23 @@ def _save_video(frames, out_dir):
     Save video from rendered frames.
     Input frames should be in [v, c, h, w] format.
     """
+    
+
+
+
     frames = np.ascontiguousarray(np.array(frames.to(torch.float32)))
     frames = rearrange(frames, "v c h w -> v h w c")
+    
     data_utils.create_video_from_frames(
         frames, 
         f"{out_dir}/rendered_video.mp4", 
         framerate=30
     )
+    frames = (frames * 255.0).clip(0.0,255.0).astype(np.uint8)
+    frames = [Image.fromarray(frame) for frame in frames]
+    os.makedirs(os.path.join(out_dir,'frames'), exist_ok=True)
+    for i, frame in enumerate(frames):
+        frame.save(os.path.join(out_dir,'frames', f"{i:05d}.png"))
 
 
 def summarize_evaluation(evaluation_folder):

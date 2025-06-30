@@ -12,6 +12,7 @@ pretrained_model
 __pycache__/
 *.py[cod]
 *$py.class
+tmp/ 
 
 
 # Distribution / packaging
